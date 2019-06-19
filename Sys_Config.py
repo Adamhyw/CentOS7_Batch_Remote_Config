@@ -250,8 +250,8 @@ def Python_Install():
 				   'mv /usr/bin/python /usr/bin/python.bak',
 				   'ln /usr/local/python3/bin/python3.7 /usr/bin/python',
 				   'ln -s /usr/local/python3/bin/pip3 /usr/bin/pip',
-				   'cp /usr/bin/yum /usr/bin/yum.bak;sed -i '1c\#! /usr/bin/python2' /usr/bin/yum',
-				   'cp /usr/libexec/urlgrabber-ext-down /usr/libexec/urlgrabber-ext-down.bak;sed -i '1c\#! /usr/bin/python2' /usr/libexec/urlgrabber-ext-down'
+				   "cp /usr/bin/yum /usr/bin/yum.bak;sed -i '1c\#! /usr/bin/python2' /usr/bin/yum",
+				   "cp /usr/libexec/urlgrabber-ext-down /usr/libexec/urlgrabber-ext-down.bak;sed -i '1c\#! /usr/bin/python2' /usr/libexec/urlgrabber-ext-down"
 				  ]
 	c = 0
 	for c in range(len(rmipls)):
