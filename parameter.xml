@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Don't modified the name inside <>-->
+	<parameter>
+		<hostinfo>
+			<description>
+			All machines' login IP and new host name should be entered here
+			Add new machine info at here
+			</description>
+			<machine001>
+				<remoteIP>192.168.31.3</remoteIP>
+				<newhostname>Docker001</newhostname>
+			</machine001>
+			<machine002>
+				<remoteIP>192.168.31.4</remoteIP>
+				<newhostname>Docker002</newhostname>
+			</machine002>
+			<machine003>
+				<remoteIP>192.168.31.5</remoteIP>
+				<newhostname>Docker003</newhostname>			
+			</machine003>
+		</hostinfo>
+		<sshlogin>
+			<description>
+			ssh login username, password and Port(default is 22)
+			</description>
+			<loginuser>root</loginuser>
+			<loginpassword>Huawei123</loginpassword>
+			<sshport>22</sshport>
+		</sshlogin>
+		<createuser>
+			<description>
+			This part is for user creation parameter
+			</description>
+			<newusergroup>dockergroup</newusergroup>
+			<newuser>dockeruser</newuser>
+			<newpassword>k8s@9000</newpassword>
+		</createuser>
+		<file_location>
+			<description>
+			This part is for file information. repo baseurl
+			</description>
+			<osimagename>CentOS-7-x86_64-DVD-1810.iso</osimagename>
+			<yumreponame>CentOS-Base.repo</yumreponame>
+			<!--Note: baseurl in repo should be modified as yum_location -->
+			<pythoninstaller>Python-3.7.3.tgz</pythoninstaller>
+			<file_path>/opt/src_files</file_path>
+			<yum_location>/opt/CentOS7</yum_location>
+		</file_location>
+	</parameter>
