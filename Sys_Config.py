@@ -11,7 +11,7 @@ import datetime
 
 #----------ssh远程执行命令 & 上传下载文件----------#
 
-# 定义远程执行批量命令的函数，作用是在一台远程主机执行多条命令。命令须是列表类型，远程IP须是字符串
+# 定义远程执行命令的函数，作用是在一台远程主机上执行一条命令并返回标准输出和错误输出。执行命令须是字符串，远程IP须是字符串
 def remote_execute(exe_cmd,remote_ip):
 
 	# 远程连接主机
@@ -24,23 +24,16 @@ def remote_execute(exe_cmd,remote_ip):
 	ssh.connect(hostname=remote_ip,port=lgsshp,username=lgusn,password=lgpsw)
 
 	# 顺序执行命令，无报错则认为成功
-	for n in range(len(exe_cmd)):
-		msg = "Running CMD: %s\n"%(exe_cmd[n])
-		log_record_print(log_name,msg)
-		stdin,stdout,stderr = ssh.exec_command(exe_cmd[n])
-		result = stderr.read()
-		if result:
-			msg = "error: %s"%(result)
-			log_record_print(log_name,msg)
-		else:
-			msg = "Succeeded\n"
-			log_record_print(log_name,msg)
-			
+	stdin,stdout,stderr = ssh.exec_command(exe_cmd)
+	result_err = stderr.readline()
+	result_out = stdout.readline()
 	
 	# 关闭ssh连接
 	ssh.close()
+	
+	return result_out,result_err
 
-# 定义远程传送文件的函数，作用是往一台远程主机传输文件。本地路径和远端路径必须是列表类型，远程IP必须是字符串
+# 定义远程传送文件的函数，作用是往一台远程主机传输一个文件。本地路径和远端路径必须是字符串，远程IP必须是字符串
 def remote_put(Localpath,Remotepath,remote_IP):
 
 	# 指定远程登录主机和登录端口
@@ -52,16 +45,8 @@ def remote_put(Localpath,Remotepath,remote_IP):
 	# 指定对象sftp
 	sftp = paramiko.SFTPClient.from_transport(trans)
 	
-	for n in range(len(Localpath)):
-	
-		msg = "Transporting files to remote host: %s\n"%(Localpath[n])
-		log_record_print(log_name,msg)
-		
-		# 上传文件到远端主机
-		sftp.put(Localpath[n],Remotepath[n])
-		
-		msg = "Transport succeeded. File locates at %s\n"%(Remotepath[n])
-		log_record_print(log_name,msg)
+	# 上传文件到远端主机
+	sftp.put(Localpath,Remotepath)
 	
 	# 结束连接
 	trans.close()
@@ -77,18 +62,12 @@ def remote_get(Localpath,Remotepath,remote_IP):
 	
 	# 指定对象sftp
 	sftp = paramiko.SFTPClient.from_transport(trans)
+			
+	msg = "Downloading files from remote host: %s\n"%(Remotepath)
+	log_record_print(log_name,msg)
 	
-	# 轮流传输多个文件到远端
-	for n in range(len(Localpath)):
-		
-		msg = "Downloading files from remote host: %s\n"%(Remotepath[n])
-		log_record_print(log_name,msg)
-		
-		# 上传文件到远端主机
-		sftp.get(Remotepath[n],Localpath[n])
-		
-		msg = "Transport succeeded. File locates at %s\n"%(Localpath[n])
-		log_record_print(log_name,msg)
+	# 上传文件到远端主机
+	sftp.get(Remotepath,Localpath)
 	
 	# 结束连接
 	trans.close()
@@ -118,20 +97,20 @@ def log_creation():
 
 #----------记录日志----------#
 def log_record_print(log_file_name,log_msg):
-	
+		
 	# 打开日志文件并追加内容在最后一行
 	logfile = open(log_file_name,'a')
 	
 	# 写入文件时如果是以对象的方式传递字符串，系统并不能识别该字符串前后的换行符，所以需要额外换行
 	logfile.write('\n')
-	
+		
 	# 记录信息
-	logfile.write(log_msg)
+	current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+	logfile.write("%s: %s"%(current_time,log_msg))
+	print("%s: %s"%(current_time,log_msg))
 	
 	logfile.close()
-	
-	print(log_msg)
-		
+			
 #----------配置前检查----------#
 
 def Pre_Check():
@@ -149,8 +128,6 @@ def Pre_Check():
 	
 	Dir_List = [OSimagedir,Yumdir,Pydir]
 	
-	c = 0
-	
 	msg = "--------------------Directory Checking--------------------\n"
 	log_record_print(log_name,msg)
 	
@@ -167,8 +144,6 @@ def Pre_Check():
 	
 	File_List = [OSimagename,Yumname,Pyname]
 	
-	c = 0
-	
 	msg = "--------------------File Checking--------------------\n"
 	log_record_print(log_name,msg)
 	
@@ -182,7 +157,6 @@ def Pre_Check():
 			Error_Counter += 1
 			
 	# 检查网络是否可达
-	c = 0
 	
 	msg = "--------------------Network Checking--------------------\n"
 	log_record_print(log_name,msg)
@@ -208,7 +182,7 @@ def Pre_Check():
 	msg = "--------------------Pre_Check finished--------------------\n"
 	log_record_print(log_name,msg)
 	
-	if Error_Counter == 0
+	if Error_Counter == 0:
 		msg = "--------------------Setup start--------------------\n"
 		log_record_print(log_name,msg)
 		
@@ -220,8 +194,6 @@ def Trans_File():
 	
 	# 错误计数器初始化
 	Error_Counter = 0
-	
-	c = 0
 
 	# 获取当前脚本所在路径，注意不要改动文件目录结构
 	rootpath = sys.path[0]
@@ -238,8 +210,11 @@ def Trans_File():
 			   os.path.join(rmflc,Yumname),
 			   os.path.join(rmflc,Pyname)
 			  ]
-	Dir_CMD = ['mkdir %s'%(rmflc)]	
+			  
+	# 如果目录不存在则创建
+	Dir_CMD = 'test ! -d %s && mkdir %s || echo "Warning: Directory exists"'%(rmflc,rmflc)	
 	
+	# 循环迭代：先主机后文件
 	for c in range(len(rmipls)):
 		
 		MachineNo = c + 1
@@ -248,8 +223,55 @@ def Trans_File():
 		log_record_print(log_name,msg)
 		
 		RMIP = rmipls[c]
-		remote_execute(Dir_CMD,RMIP)		
-		remote_put(lcp_put,rmp_put,RMIP)
+		
+		# 创建远端文件夹
+		msg = "Creating directory: %s\n"%(rmflc)
+		log_record_print(log_name,msg)
+		result = remote_execute(Dir_CMD,RMIP)
+		
+		for n in range(len(result)):
+			if result[n]:
+				msg = "%s"%(result[n])
+				log_record_print(log_name,msg)
+		
+		# 先检查文件是否已存在，如果存在则不传输
+		
+		for n in range(len(rmp_put)):
+			dir_name,file_name = os.path.split(rmp_put[n])
+			msg = "Transporting file: %s\n"%(file_name)
+			log_record_print(log_name,msg)
+			
+			# 检查文件是否已存在，不存在则返回1，存在则返回0
+			result = remote_execute('test ! -f %s && echo 1 || echo 0'%(rmp_put[n]),RMIP)				
+				
+			#分析检查结果，1则传输文件，0则跳过传输	
+			if result[0] == '1\n':
+				remote_put(lcp_put[n],rmp_put[n],RMIP)
+			elif result[0] == '0\n':
+				msg = "File %s exists, skipped\n"%(rmp_put[n])
+				log_record_print(log_name,msg)
+		
+		# 检查文件是否传输成功
+		Fail_Record = []
+		for	n in range(len(rmp_put)):
+		
+			# 检查文件是否已传输成功，成功则返回1，失败则返回0
+			result = remote_execute('test -f %s && echo 1 || echo 0'%(rmp_put[n]),RMIP)
+			
+			# 记录失败文件名
+			if result[0] == '0\n':
+				Error_Counter += 1
+				Fail_Record.append("%s: file %s transport failed"%(RMIP,rmp_put[n]))
+	
+	# 打印失败结果
+	if Error_Counter > 0:
+		
+		msg = "--------------------Failed to transport these files:--------------------\n"
+		log_record_print(log_name,msg)	
+		
+		for m in range(len(Fail_Record)):
+			msg = "%s\n"%(Fail_Record[m])
+			log_record_print(log_name,msg)	
 	
 	return Error_Counter
 	
@@ -259,8 +281,6 @@ def Initial_Config():
 
 	# 错误计数器初始化
 	Error_Counter = 0
-	
-	c = 0
 	
 	for c in range(len(rmipls)):
 		
@@ -298,7 +318,6 @@ def Yum_Repo_Src():
 				 'umount /tmp/CentOS7;rm -rf /tmp/CentOS7' #取消挂载并删除临时目录
 			  ]
 
-	c = 0
 	for c in range(len(rmipls)):
 		
 		MachineNo = c + 1
@@ -331,7 +350,7 @@ def Python_Install():
 				   "cp /usr/bin/yum /usr/bin/yum.bak;sed -i '1c\#! /usr/bin/python2' /usr/bin/yum",
 				   "cp /usr/libexec/urlgrabber-ext-down /usr/libexec/urlgrabber-ext-down.bak;sed -i '1c\#! /usr/bin/python2' /usr/libexec/urlgrabber-ext-down"
 				  ]
-	c = 0
+				  
 	for c in range(len(rmipls)):
 		
 		MachineNo = c + 1
@@ -457,26 +476,28 @@ except FileNotFoundError:
 
 else:
 	if para_check_errors > 0:
-		msg = "Script stopped because some parameter not defined. Please check and modified xml files\n%s\n"%(Not_Defined_Para)
+		msg = "Script stopped because some parameter not defined. Please check log file: %s\n"%(log_name)
 		log_record_print(log_name,msg)
 	elif Pre_Check() > 0: 
-		msg = "Script stopped because pre-check failed. Please correct all errors before rerun\n"
+		msg = "Script stopped because pre-check failed. Please check log file: %s\n"%(log_name)
 		log_record_print(log_name,msg)
 	# 开始设置远程主机
 	elif Trans_File() > 0:
-		msg = "Script stopped because transportation failed. Please check log file\n"
+		msg = "Script stopped because transportation failed. Please check log file: %s\n"%(log_name)
 		log_record_print(log_name,msg)
+	'''
 	elif Initial_Config() > 0:	
-		msg = "Script stopped because initial Configuration failed. Please check log file\n"
+		msg = "Script stopped because initial Configuration failed. Please check log file: %s\n"%(log_name)
 		log_record_print(log_name,msg)
 	elif Yum_Repo_Src() > 0:
-		msg = "Script stopped because yum setup failed. Please check log file\n"
+		msg = "Script stopped because yum setup failed. Please check log file: %s\n"%(log_name)
 		log_record_print(log_name,msg)
 	elif Python_Install() > 0:
-		msg = "Script stopped because python installation failed. Please check log file\n"
+		msg = "Script stopped because python installation failed. Please check log file: %s\n"%(log_name)
 		log_record_print(log_name,msg)
-	else:	
-		# 结束设置远程主机
-		msg = "--------------------Finished--------------------\n"
-		log_record_print(log_name,msg)
-		
+	'''
+	
+	# 结束设置远程主机
+	msg = "--------------------Finished--------------------\n"
+	log_record_print(log_name,msg)
+	print("Log record in file: %s\n"%(log_name))
