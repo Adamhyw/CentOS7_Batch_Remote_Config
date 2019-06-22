@@ -7,86 +7,9 @@ import sys
 import argparse
 import paramiko
 import xml.dom.minidom
+import datetime
 
-#----------参数导入----------#
-
-# 外传参数方法调用
-parser = argparse.ArgumentParser()
-# 定义外传参数：xml文件名称
-parser.add_argument('-xmlfile',required=True,dest='XMLfile',help='xml file name')
-# 装载外传参数到args
-args = parser.parse_args()
-
-# 打开xml文件
-dom = xml.dom.minidom.parse('%s'%(args.XMLfile))
-
-# 获取远程IP列表
-RMIPLS = dom.getElementsByTagName('remoteIP')
-# 获取新主机名列表
-NHNLS = dom.getElementsByTagName('newhostname')
-# 获取ssh登录用户名
-LGUSN = dom.getElementsByTagName('loginuser')
-# 获取ssh登录密码
-LGPSW = dom.getElementsByTagName('loginpassword')
-# 获取ssh登录端口号
-LGSSHP = dom.getElementsByTagName('sshport')
-# 获取新建用户组
-NUSG = dom.getElementsByTagName('newusergroup')
-# 获取新建用户名
-NUSN = dom.getElementsByTagName('newuser')
-# 获取新建用户密码
-NUPSW = dom.getElementsByTagName('newpassword')
-# 获取远端主机保存位置
-RMFLC = dom.getElementsByTagName('file_path')
-# 获取远端主机yum源目录
-YUMLC = dom.getElementsByTagName('yum_location')
-# 获取镜像名称
-OSIMN = dom.getElementsByTagName('osimagename')
-# 获取repo文件名称
-YRPN = dom.getElementsByTagName('yumreponame')
-# 获取python安装文件名称
-PYISLN = dom.getElementsByTagName('pythoninstaller')
-
-# 提取所有参数
-rmipls = []
-nhnls = []
-for c in range(len(RMIPLS)):
-	rmipls.append(RMIPLS[c].firstChild.data)
-	nhnls.append(NHNLS[c].firstChild.data)
-
-lgusn = LGUSN[0].firstChild.data
-lgpsw = LGPSW[0].firstChild.data
-lgsshp = LGSSHP[0].firstChild.data
-nusg = NUSG[0].firstChild.data
-nusn = NUSN[0].firstChild.data
-nupsw = NUPSW[0].firstChild.data
-rmflc = RMFLC[0].firstChild.data
-yumlc = YUMLC[0].firstChild.data
-OSimagename = OSIMN[0].firstChild.data
-Yumname = YRPN[0].firstChild.data
-Pyname = PYISLN[0].firstChild.data
-
-# 以下为配置文件存放文件夹，请不要修改，除非修改安装包
-OSimagedir = 'OS_Image'
-Yumdir = 'Yum_Repo'
-Pydir = 'Python'
-
-# 打印提取结果
-print('remote host IP list:\n',rmipls)
-print('new host name list:\n',nhnls)	
-print('loginuser:\n',lgusn)
-print('loginpassword:\n',lgpsw)
-print('sshport:\n',lgsshp)
-print('newusergroup:\n',nusg)
-print('newuser:\n',nusn)
-print('newpassword:\n',nupsw)
-print('remotefileslocation:\n',rmflc)
-print('yum source location:\n',yumlc)
-print('OS image name:\n',OSimagename)
-print('yum repo name:\n',Yumname)
-print('python installer name:\n',Pyname)
-
-#----------定义函数：ssh远程执行命令 & 上传下载文件----------#
+#----------ssh远程执行命令 & 上传下载文件----------#
 
 # 定义远程执行批量命令的函数，作用是在一台远程主机执行多条命令。命令须是列表类型，远程IP须是字符串
 def remote_execute(exe_cmd,remote_ip):
@@ -102,13 +25,17 @@ def remote_execute(exe_cmd,remote_ip):
 
 	# 顺序执行命令，无报错则认为成功
 	for n in range(len(exe_cmd)):
-		print("Running CMD: %s\n"%(exe_cmd[n]))
+		msg = "Running CMD: %s\n"%(exe_cmd[n])
+		log_record_print(log_name,msg)
 		stdin,stdout,stderr = ssh.exec_command(exe_cmd[n])
 		result = stderr.read()
 		if result:
-			print("error: %s"%result)
+			msg = "error: %s"%(result)
+			log_record_print(log_name,msg)
 		else:
-			print("Succeeded\n")
+			msg = "Succeeded\n"
+			log_record_print(log_name,msg)
+			
 	
 	# 关闭ssh连接
 	ssh.close()
@@ -126,13 +53,15 @@ def remote_put(Localpath,Remotepath,remote_IP):
 	sftp = paramiko.SFTPClient.from_transport(trans)
 	
 	for n in range(len(Localpath)):
-		
-		print("Transporting files to remote host: %s\n"%(Localpath[n]))
+	
+		msg = "Transporting files to remote host: %s\n"%(Localpath[n])
+		log_record_print(log_name,msg)
 		
 		# 上传文件到远端主机
 		sftp.put(Localpath[n],Remotepath[n])
 		
-		print("Transport succeeded. File locates at %s\n"%(Remotepath[n]))
+		msg = "Transport succeeded. File locates at %s\n"%(Remotepath[n])
+		log_record_print(log_name,msg)
 	
 	# 结束连接
 	trans.close()
@@ -152,41 +81,146 @@ def remote_get(Localpath,Remotepath,remote_IP):
 	# 轮流传输多个文件到远端
 	for n in range(len(Localpath)):
 		
-		print("Downloading files from remote host: %s\n"%(Remotepath[n]))
+		msg = "Downloading files from remote host: %s\n"%(Remotepath[n])
+		log_record_print(log_name,msg)
 		
 		# 上传文件到远端主机
 		sftp.get(Remotepath[n],Localpath[n])
 		
-		print("Transport succeeded. File locates at %s\n"%(Localpath[n]))
+		msg = "Transport succeeded. File locates at %s\n"%(Localpath[n])
+		log_record_print(log_name,msg)
 	
 	# 结束连接
 	trans.close()
 
-#----------基本配置----------#
+#----------创建日志文件----------#
+def log_creation():
+	print('\n--------------------Creating Log File--------------------\n')
+	current_time = datetime.datetime.now().strftime('%Y-%m-%d-%H-%M-%S')
+	
+	c_w_d = sys.path[0]
+	
+	log_root_dir = os.path.join(c_w_d,'log')
+	if os.path.exists(log_root_dir) == True:
+		print('%s exists, skipped\n'%(log_root_dir))
+	else:
+		os.mkdir(log_root_dir)
+		print('log directory created: %s\n'%(log_root_dir))
+		
+	log_file_name = os.path.join(log_root_dir,'log-%s.txt'%(current_time))
+	# 打开文件，'w'参数代表作为写入模式，如果该文件不存在则创建该文件，如果该文件存在则追加覆盖文本内容；
+	logfile = open(log_file_name,'w')
+	logfile.write('--------------------start--------------------\n')
+	logfile.close()
+	print('log file created: %s\n'%(log_file_name))
+	
+	return log_file_name
 
-def Initial_Config():
+#----------记录日志----------#
+def log_record_print(log_file_name,log_msg):
+	
+	# 打开日志文件并追加内容在最后一行
+	logfile = open(log_file_name,'a')
+	
+	# 写入文件时如果是以对象的方式传递字符串，系统并不能识别该字符串前后的换行符，所以需要额外换行
+	logfile.write('\n')
+	
+	# 记录信息
+	logfile.write(log_msg)
+	
+	logfile.close()
+	
+	print(log_msg)
+		
+#----------配置前检查----------#
+
+def Pre_Check():
+	
+	msg = "--------------------Pre_Check start--------------------\n"
+	log_record_print(log_name,msg)
+	
+	# 错误计数器
+	Error_Counter = 0
+	
+	# 脚本所在目录
+	cwd_path = sys.path[0]
+	
+	# 检查目录正确性
+	
+	Dir_List = [OSimagedir,Yumdir,Pydir]
+	
 	c = 0
+	
+	msg = "--------------------Directory Checking--------------------\n"
+	log_record_print(log_name,msg)
+	
+	for c in range(len(Dir_List)):
+		if os.path.exists(os.path.join(cwd_path,Dir_List[c])):
+			msg = "Directory %s exists\n"%(Dir_List[c])
+			log_record_print(log_name,msg)
+		else:
+			msg = "Error: Directory %s not exists\n"%(Dir_List[c])
+			log_record_print(log_name,msg)
+			Error_Counter += 1
+			
+	# 检查文件名正确性
+	
+	File_List = [OSimagename,Yumname,Pyname]
+	
+	c = 0
+	
+	msg = "--------------------File Checking--------------------\n"
+	log_record_print(log_name,msg)
+	
+	for c in range(len(File_List)):
+		if os.path.exists(os.path.join(cwd_path,Dir_List[c],File_List[c])):
+			msg = "File %s exists\n"%(File_List[c])
+			log_record_print(log_name,msg)
+		else:
+			msg = "Error: File %s not exists\n"%(File_List[c])
+			log_record_print(log_name,msg)
+			Error_Counter += 1
+			
+	# 检查网络是否可达
+	c = 0
+	
+	msg = "--------------------Network Checking--------------------\n"
+	log_record_print(log_name,msg)
+	
+	ssh = paramiko.SSHClient()
+	ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+	
 	for c in range(len(rmipls)):
+		try:
+			ssh.connect(hostname=rmipls[c],port=lgsshp,username=lgusn,password=lgpsw)
+			msg = "Connection succeeded: %s\n"%(rmipls[c])
+			log_record_print(log_name,msg)
+		except OSError as err_msg:
+			msg = "%s\n Can't reach IP Address: %s\n"%(err_msg,rmipls[c])
+			log_record_print(log_name,msg)
+			Error_Counter += 1
+		except paramiko.ssh_exception.AuthenticationException as err_msg:
+			msg = "%s\n username or password is wrong: %s\n"%(err_msg,rmipls[c])
+			log_record_print(log_name,msg)
+			Error_Counter += 1
+	
+	# 检查结束
+	msg = "--------------------Pre_Check finished--------------------\n"
+	log_record_print(log_name,msg)
+	
+	if Error_Counter == 0
+		msg = "--------------------Setup start--------------------\n"
+		log_record_print(log_name,msg)
 		
-		MachineNo = c + 1
-		
-		print("--------------------Machine%s configuration--------------------"%(MachineNo))
-		
-		# 定义远程执行的命令(基本配置)
-		Initial_CMD = [
-					   'hostname %s'%(nhnls[c]),
-					   'groupadd %s'%(nusg),
-					   'useradd -g %s %s'%(nusg,nusn),
-					   'echo %s | passwd %s --stdin'%(nupsw,nusn),
-					   'mkdir %s'%(rmflc)
-					  ]
-		RMIP = rmipls[c]	
-		remote_execute(Initial_CMD,RMIP)
+	return Error_Counter
 
 #----------上传文件----------#
 
 def Trans_File():	
-	# 传输文件至远端
+	
+	# 错误计数器初始化
+	Error_Counter = 0
+	
 	c = 0
 
 	# 获取当前脚本所在路径，注意不要改动文件目录结构
@@ -204,19 +238,56 @@ def Trans_File():
 			   os.path.join(rmflc,Yumname),
 			   os.path.join(rmflc,Pyname)
 			  ]
-			
+	Dir_CMD = ['mkdir %s'%(rmflc)]	
+	
 	for c in range(len(rmipls)):
 		
 		MachineNo = c + 1
-			
-		print("--------------------Machine%s Transporting--------------------"%MachineNo)
 		
-		RMIP = rmipls[c]	
+		msg = "--------------------Machine%s Transporting--------------------\n"%(MachineNo)
+		log_record_print(log_name,msg)
+		
+		RMIP = rmipls[c]
+		remote_execute(Dir_CMD,RMIP)		
 		remote_put(lcp_put,rmp_put,RMIP)
+	
+	return Error_Counter
+	
+#----------基本配置----------#
 
+def Initial_Config():
+
+	# 错误计数器初始化
+	Error_Counter = 0
+	
+	c = 0
+	
+	for c in range(len(rmipls)):
+		
+		MachineNo = c + 1
+		
+		msg = "--------------------Machine%s configuration-------------------\n"%(MachineNo)
+		log_record_print(log_name,msg)
+		
+		# 定义远程执行的命令(基本配置)
+		Initial_CMD = [
+					   'hostnamectl set-hostname --static %s'%(nhnls[c]),
+					   'groupadd %s'%(nusg),
+					   'useradd -g %s %s'%(nusg,nusn),
+					   'echo %s | passwd %s --stdin'%(nupsw,nusn),
+					  ]
+		RMIP = rmipls[c]	
+		remote_execute(Initial_CMD,RMIP)
+	
+	return Error_Counter
+	
 #----------配置Yum本地源----------#
 
 def Yum_Repo_Src():
+
+	# 错误计数器初始化
+	Error_Counter = 0
+	
 	# 定义yum配置命令
 	Yum_CMD = [
 				 'mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d/CentOS-Base.repo.bak',
@@ -232,15 +303,22 @@ def Yum_Repo_Src():
 		
 		MachineNo = c + 1
 		
-		print("--------------------Machine%s Yum config--------------------"%(MachineNo))
+		msg = "--------------------Machine%s Yum config--------------------\n"%(MachineNo)
+		log_record_print(log_name,msg)
 		
 		RMIP = rmipls[c]
 		
 		remote_execute(Yum_CMD,RMIP)
-
+	
+	return Error_Counter
+	
 #----------安装python----------#
 
 def Python_Install():
+
+	# 错误计数器初始化
+	Error_Counter = 0
+	
 	# 定义python安装命令
 	PySetup_CMD = [
 				   'mkdir %s/Python3'%(rmflc),
@@ -258,18 +336,147 @@ def Python_Install():
 		
 		MachineNo = c + 1
 		
-		print("--------------------Machine%s Python installation--------------------"%(MachineNo))
+		msg = "--------------------Machine%s Python installation--------------------\n"%(MachineNo)
+		log_record_print(log_name,msg)
 		
 		RMIP = rmipls[c]
 		
 		remote_execute(PySetup_CMD,RMIP)
-
+	
+	return Error_Counter
+	
 #----------程序主体----------#
 
-Initial_Config()
-Trans_File()
-Yum_Repo_Src()
-Python_Install()
-print("--------------------Finished--------------------")
+log_name = log_creation()
 
+try: 
+	#----------外传参数----------#
+	# 外传参数方法调用
+	parser = argparse.ArgumentParser()
+	# 定义外传参数：xml文件名称
+	parser.add_argument('-xmlfile',required=True,dest='XMLfile',help='xml file name')
+	# 装载外传参数到args
+	args = parser.parse_args()
 
+	# 打开xml文件
+	dom = xml.dom.minidom.parse('%s'%(args.XMLfile))
+
+	# 获取远程IP列表
+	RMIPLS = dom.getElementsByTagName('remoteIP')
+	# 获取新主机名列表
+	NHNLS = dom.getElementsByTagName('newhostname')
+	# 获取ssh登录用户名
+	LGUSN = dom.getElementsByTagName('loginuser')
+	# 获取ssh登录密码
+	LGPSW = dom.getElementsByTagName('loginpassword')
+	# 获取ssh登录端口号
+	LGSSHP = dom.getElementsByTagName('sshport')
+	# 获取新建用户组
+	NUSG = dom.getElementsByTagName('newusergroup')
+	# 获取新建用户名
+	NUSN = dom.getElementsByTagName('newuser')
+	# 获取新建用户密码
+	NUPSW = dom.getElementsByTagName('newpassword')
+	# 获取远端主机保存位置
+	RMFLC = dom.getElementsByTagName('file_path')
+	# 获取远端主机yum源目录
+	YUMLC = dom.getElementsByTagName('yum_location')
+	# 获取镜像名称
+	OSIMN = dom.getElementsByTagName('osimagename')
+	# 获取repo文件名称
+	YRPN = dom.getElementsByTagName('yumreponame')
+	# 获取python安装文件名称
+	PYISLN = dom.getElementsByTagName('pythoninstaller')
+
+	# 提取所有参数
+	rmipls = []
+	for c in range(len(RMIPLS)):
+		rmipls.append(RMIPLS[c].firstChild.data)
+		
+	nhnls = []
+	for c in range(len(NHNLS)):
+		nhnls.append(NHNLS[c].firstChild.data)
+		
+	lgusn = LGUSN[0].firstChild.data
+	lgpsw = LGPSW[0].firstChild.data
+	lgsshp = LGSSHP[0].firstChild.data
+	nusg = NUSG[0].firstChild.data
+	nusn = NUSN[0].firstChild.data
+	nupsw = NUPSW[0].firstChild.data
+	rmflc = RMFLC[0].firstChild.data
+	yumlc = YUMLC[0].firstChild.data
+	OSimagename = OSIMN[0].firstChild.data
+	Yumname = YRPN[0].firstChild.data
+	Pyname = PYISLN[0].firstChild.data
+
+	Para_Dict = {
+				 "remote host IP list":rmipls,
+				 "new host name list":nhnls,
+				 "login user":lgusn,
+				 "login password":lgpsw,
+				 "ssh port":lgsshp,
+				 "new user group":nusg,
+				 "new user":nusn,
+				 "new password":nupsw,
+				 "remote files location":rmflc,
+				 "yum source location":yumlc,
+				 "OS image name":OSimagename,
+				 "yum repo name":Yumname,
+				 "python installer name":Pyname
+				 }
+	
+	# 以下为配置文件存放文件夹，请不要修改，除非修改安装包
+	OSimagedir = 'OS_Image'
+	Yumdir = 'Yum_Repo'
+	Pydir = 'Python'
+
+	# 打印提取结果
+	msg = '\n--------------------Parameter Analysis Result--------------------\n'
+	log_record_print(log_name,msg)
+	
+	para_check_errors = 0
+	Not_Defined_Para = []
+	
+	for key in Para_Dict.keys():
+		if Para_Dict[key]:
+			if (key == "login password") | (key == "new password"):
+				msg = "%s:\n***\n"%(key)
+				log_record_print(log_name,msg)
+			else:	
+				msg = "%s:\n%s\n"%(key,Para_Dict[key])
+				log_record_print(log_name,msg)
+		else:
+			msg = "%s NOT defined\n"%(key)
+			log_record_print(log_name,msg)
+			para_check_errors += 1
+			Not_Defined_Para.append(key)
+	
+except FileNotFoundError:
+	msg = "Error: Can't find xml file in specified location, please enter correct path\n"
+	log_record_print(log_name,msg)
+
+else:
+	if para_check_errors > 0:
+		msg = "Script stopped because some parameter not defined. Please check and modified xml files\n%s\n"%(Not_Defined_Para)
+		log_record_print(log_name,msg)
+	elif Pre_Check() > 0: 
+		msg = "Script stopped because pre-check failed. Please correct all errors before rerun\n"
+		log_record_print(log_name,msg)
+	# 开始设置远程主机
+	elif Trans_File() > 0:
+		msg = "Script stopped because transportation failed. Please check log file\n"
+		log_record_print(log_name,msg)
+	elif Initial_Config() > 0:	
+		msg = "Script stopped because initial Configuration failed. Please check log file\n"
+		log_record_print(log_name,msg)
+	elif Yum_Repo_Src() > 0:
+		msg = "Script stopped because yum setup failed. Please check log file\n"
+		log_record_print(log_name,msg)
+	elif Python_Install() > 0:
+		msg = "Script stopped because python installation failed. Please check log file\n"
+		log_record_print(log_name,msg)
+	else:	
+		# 结束设置远程主机
+		msg = "--------------------Finished--------------------\n"
+		log_record_print(log_name,msg)
+		
