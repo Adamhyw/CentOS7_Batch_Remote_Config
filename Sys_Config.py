@@ -257,13 +257,7 @@ def Trans_File():
 		
 		# 创建远端文件夹
 		msg = "Creating directory: %s\n"%(rmflc)
-		log_record_print(log_name,msg)
-		result_stdout,result_errout = remote_execute(Dir_CMD,RMIP)
-		
-		for n in range(len(result_stdout)):
-			if result_stdout[n]:
-				msg = "%s"%(result_stdout[n])
-				log_record_print(log_name,msg)
+		execute_wt_deter(msg,Dir_CMD,RMIP)
 		
 		# 先检查文件是否已存在，如果存在则不传输
 		
