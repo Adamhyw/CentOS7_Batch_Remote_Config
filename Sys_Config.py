@@ -66,9 +66,6 @@ def remote_get(Localpath,Remotepath,remote_IP):
 	# 指定对象sftp
 	sftp = paramiko.SFTPClient.from_transport(trans)
 			
-	msg = "Downloading files from remote host: %s\n"%(Remotepath)
-	log_record_print(log_name,msg)
-	
 	# 上传文件到远端主机
 	sftp.get(Remotepath,Localpath)
 	
